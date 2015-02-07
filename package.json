@@ -1,0 +1,30 @@
+{
+  "name": "adapter.js",
+  "version": "1.0.0",
+  "description": "WebRTC Shim to insulate apps from spec changes and prefix differences.",
+  "main": "adapter.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "browserify-demo": "beefy examples/usage-npm-browserify.js",
+    "other-demos": "st -nc -p 8090",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webrtc/adapter.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/webrtc/adapter/issues"
+  },
+  "homepage": "https://github.com/webrtc/adapter",
+  "devDependencies": {
+    "beefy": "^2.1.3",
+    "browserify": "^8.1.3",
+    "crel": "^2.1.8",
+    "st": "^0.5.2"
+  }
+}
