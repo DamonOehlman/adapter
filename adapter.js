@@ -15,10 +15,14 @@ mozRTCSessionDescription, webkitRTCPeerConnection, MediaStreamTrack */
 /* exported trace,requestUserMedia */
 'use strict';
 
+(function () {
+  // exports that should be patched to navigator
+  var navigatorExports = ['getUserMedia'];
+
+  // initialise the adapter
+  var adapter = {};
+
 var RTCPeerConnection = null;
-var getUserMedia = null;
-var attachMediaStream = null;
-var reattachMediaStream = null;
 var webrtcDetectedBrowser = null;
 var webrtcDetectedVersion = null;
 
@@ -44,7 +48,7 @@ if (navigator.mozGetUserMedia) {
     parseInt(navigator.userAgent.match(/Firefox\/([0-9]+)\./)[1], 10);
 
   // The RTCPeerConnection object.
-  RTCPeerConnection = function(pcConfig, pcConstraints) {
+  adapter.RTCPeerConnection = function(pcConfig, pcConstraints) {
     // .urls is not supported in FF yet.
     if (pcConfig && pcConfig.iceServers) {
       for (var i = 0; i < pcConfig.iceServers.length; i++) {
@@ -58,15 +62,14 @@ if (navigator.mozGetUserMedia) {
   };
 
   // The RTCSessionDescription object.
-  window.RTCSessionDescription = mozRTCSessionDescription;
+  adapter.RTCSessionDescription = mozRTCSessionDescription;
 
   // The RTCIceCandidate object.
-  window.RTCIceCandidate = mozRTCIceCandidate;
+  adapter.RTCIceCandidate = mozRTCIceCandidate;
 
   // getUserMedia shim (only difference is the prefix).
   // Code from Adam Barth.
-  getUserMedia = navigator.mozGetUserMedia.bind(navigator);
-  navigator.getUserMedia = getUserMedia;
+  adapter.getUserMedia = navigator.mozGetUserMedia.bind(navigator);
 
   // Shim for MediaStreamTrack.getSources.
   MediaStreamTrack.getSources = function(successCb) {
@@ -80,7 +83,7 @@ if (navigator.mozGetUserMedia) {
   };
 
   // Creates ICE server from the URL for FF.
-  window.createIceServer = function(url, username, password) {
+  adapter.createIceServer = function(url, username, password) {
     var iceServer = null;
     var urlParts = url.split(':');
     if (urlParts[0].indexOf('stun') === 0) {
@@ -115,12 +118,12 @@ if (navigator.mozGetUserMedia) {
     return iceServer;
   };
 
-  window.createIceServers = function(urls, username, password) {
+  adapter.createIceServers = function(urls, username, password) {
     var iceServers = [];
     // Use .url for FireFox.
     for (var i = 0; i < urls.length; i++) {
       var iceServer =
-        window.createIceServer(urls[i], username, password);
+        adapter.createIceServer(urls[i], username, password);
       if (iceServer !== null) {
         iceServers.push(iceServer);
       }
@@ -129,12 +132,12 @@ if (navigator.mozGetUserMedia) {
   };
 
   // Attach a media stream to an element.
-  attachMediaStream = function(element, stream) {
+  adapter.attachMediaStream = function(element, stream) {
     console.log('Attaching media stream');
     element.mozSrcObject = stream;
   };
 
-  reattachMediaStream = function(to, from) {
+  adapter.reattachMediaStream = function(to, from) {
     console.log('Reattaching media stream');
     to.mozSrcObject = from.mozSrcObject;
   };
@@ -153,7 +156,7 @@ if (navigator.mozGetUserMedia) {
   }
 
   // Creates iceServer from the url for Chrome M33 and earlier.
-  window.createIceServer = function(url, username, password) {
+  adapter.createIceServer = function(url, username, password) {
     var iceServer = null;
     var urlParts = url.split(':');
     if (urlParts[0].indexOf('stun') === 0) {
@@ -173,7 +176,7 @@ if (navigator.mozGetUserMedia) {
   };
 
   // Creates an ICEServer object from multiple URLs.
-  window.createIceServers = function(urls, username, password) {
+  adapter.createIceServers = function(urls, username, password) {
     return {
       'urls': urls,
       'credential': password,
@@ -182,17 +185,16 @@ if (navigator.mozGetUserMedia) {
   };
 
   // The RTCPeerConnection object.
-  RTCPeerConnection = function(pcConfig, pcConstraints) {
+  adapter.RTCPeerConnection = function(pcConfig, pcConstraints) {
     return new webkitRTCPeerConnection(pcConfig, pcConstraints);
   };
 
   // Get UserMedia (only difference is the prefix).
   // Code from Adam Barth.
-  getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
-  navigator.getUserMedia = getUserMedia;
+  adapter.getUserMedia = navigator.webkitGetUserMedia.bind(navigator);
 
   // Attach a media stream to an element.
-  attachMediaStream = function(element, stream) {
+  adapter.attachMediaStream = function(element, stream) {
     if (typeof element.srcObject !== 'undefined') {
       element.srcObject = stream;
     } else if (typeof element.mozSrcObject !== 'undefined') {
@@ -204,7 +206,7 @@ if (navigator.mozGetUserMedia) {
     }
   };
 
-  reattachMediaStream = function(to, from) {
+  adapter.reattachMediaStream = function(to, from) {
     to.src = from.src;
   };
 } else {
@@ -229,15 +231,24 @@ function requestUserMedia(constraints) {
   });
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    RTCPeerConnection: RTCPeerConnection,
-    getUserMedia: getUserMedia,
-    attachMediaStream: attachMediaStream,
-    reattachMediaStream: reattachMediaStream,
-    webrtcDetectedBrowser: webrtcDetectedBrowser,
-    webrtcDetectedVersion: webrtcDetectedVersion
-    //requestUserMedia: not exposed on purpose.
-    //trace: not exposed on purpose.
-  };
-}
+  // patch the detected version and browser into the adapter
+  adapter.webrtcDetectedBrowser = webrtcDetectedBrowser;
+  adapter.webrtcDetectedVersion = webrtcDetectedVersion;
+
+  // AMDjs case
+  if (typeof define === 'function' && define.amd) {
+    define([], adapter);
+  }
+  // commonjs case
+  else if (typeof module != 'undefined') {
+    module.exports = adapter;
+  }
+  // window global case
+  else {
+    // patch exported adapter functions into window (backwards compat)
+    Object.keys(adapter).forEach(function(key) {
+      var target = navigatorExports.indexOf(key) >= 0 ? navigator : window;
+      target[key] = adapter[key];
+    });
+  }
+}());
